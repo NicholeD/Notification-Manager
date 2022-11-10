@@ -4,7 +4,6 @@ import com.kenzie.executorservices.ringupdatescheck.devicecommunication.RingDevi
 import com.kenzie.executorservices.ringupdatescheck.model.devicecommunication.GetDeviceSystemInfoRequest;
 import com.kenzie.executorservices.ringupdatescheck.model.devicecommunication.GetDeviceSystemInfoResponse;
 import com.kenzie.executorservices.ringupdatescheck.model.devicecommunication.RingDeviceFirmwareVersion;
-import com.kenzie.executorservices.ringupdatescheck.util.KnownRingDeviceFirmwareVersions;
 import com.kenzie.executorservices.ringupdatescheck.util.RingDeviceFirmwareVersionComparator;
 
 /**

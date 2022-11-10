@@ -2,11 +2,10 @@ package com.kenzie.executorservices.ringupdatescheck.checker;
 
 import com.kenzie.executorservices.ringupdatescheck.model.customer.GetCustomerDevicesRequest;
 import com.kenzie.executorservices.ringupdatescheck.model.customer.GetCustomerDevicesResponse;
-import com.kenzie.executorservices.ringupdatescheck.model.devicecommunication.GetDeviceSystemInfoRequest;
-import com.kenzie.executorservices.ringupdatescheck.model.devicecommunication.GetDeviceSystemInfoResponse;
 import com.kenzie.executorservices.ringupdatescheck.model.devicecommunication.RingDeviceFirmwareVersion;
 import com.kenzie.executorservices.ringupdatescheck.customer.CustomerService;
 import com.kenzie.executorservices.ringupdatescheck.devicecommunication.RingDeviceCommunicatorService;
+import com.kenzie.executorservices.ringupdatescheck.model.devicecommunication.UpdateDeviceFirmwareRequest;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -82,7 +81,18 @@ public class DeviceChecker {
     public void updateDevice(final String deviceId, final RingDeviceFirmwareVersion version) {
         System.out.println(String.format("[DeviceChecker] Updating device %s to version %s", deviceId, version));
 
-        // PARTICIPANTS: add remaining implementation here in Phase 4
+        ExecutorService updateExecutor = Executors.newCachedThreadPool();
+
+        Runnable updateDeviceFirmware = () -> {
+            UpdateDeviceFirmwareRequest.Builder requestBuilder = new UpdateDeviceFirmwareRequest.Builder();
+            requestBuilder.withDeviceId(deviceId);
+            requestBuilder.withVersion(version);
+            UpdateDeviceFirmwareRequest updateRequest = requestBuilder.build();
+            ringDeviceCommunicatorService.updateDeviceFirmware(updateRequest);
+        };
+
+        updateExecutor.submit(updateDeviceFirmware);
+        updateExecutor.shutdown();
     }
 
     public CustomerService getCustomerService() {
