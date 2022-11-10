@@ -9,6 +9,8 @@ import com.kenzie.executorservices.ringupdatescheck.customer.CustomerService;
 import com.kenzie.executorservices.ringupdatescheck.devicecommunication.RingDeviceCommunicatorService;
 
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -59,9 +61,17 @@ public class DeviceChecker {
      * @return The number of devices that were checked
      */
     public int checkDevicesConcurrently(final String customerId, RingDeviceFirmwareVersion version) {
+        GetCustomerDevicesRequest devicesRequest = getDevicesRequest(customerId);
+        GetCustomerDevicesResponse devicesResponse = customerService.getCustomerDevices(devicesRequest);
+        ExecutorService deviceExecutor = Executors.newCachedThreadPool();
 
+        List<DeviceCheckTask> deviceTasks = devicesResponse.getDeviceIds().stream()
+                .map(deviceId -> new DeviceCheckTask(this, deviceId, version))
+                .collect(Collectors.toList());
+        deviceTasks.stream().forEach(task -> deviceExecutor.submit(task));
+        deviceExecutor.shutdown();
 
-        return 0;
+        return deviceTasks.size();
     }
 
     /**
