@@ -1,8 +1,15 @@
 package com.kenzie.executorservices.ringupdatescheck.checker;
 
+import com.kenzie.executorservices.ringupdatescheck.model.customer.GetCustomerDevicesRequest;
+import com.kenzie.executorservices.ringupdatescheck.model.customer.GetCustomerDevicesResponse;
+import com.kenzie.executorservices.ringupdatescheck.model.devicecommunication.GetDeviceSystemInfoRequest;
+import com.kenzie.executorservices.ringupdatescheck.model.devicecommunication.GetDeviceSystemInfoResponse;
 import com.kenzie.executorservices.ringupdatescheck.model.devicecommunication.RingDeviceFirmwareVersion;
 import com.kenzie.executorservices.ringupdatescheck.customer.CustomerService;
 import com.kenzie.executorservices.ringupdatescheck.devicecommunication.RingDeviceCommunicatorService;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Utility object for checking version status of devices, and updating
@@ -35,8 +42,14 @@ public class DeviceChecker {
      * @return The number of devices that were checked
      */
     public int checkDevicesIteratively(final String customerId, RingDeviceFirmwareVersion version) {
-        // PARTICIPANTS: implement in Phase 2
-        return 0;
+        GetCustomerDevicesRequest devicesRequest = getDevicesRequest(customerId);
+        GetCustomerDevicesResponse devicesResponse = customerService.getCustomerDevices(devicesRequest);
+
+        List<DeviceCheckTask> devices = devicesResponse.getDeviceIds().stream()
+                .map(deviceId -> new DeviceCheckTask(this, deviceId, version))
+                .collect(Collectors.toList());
+        devices.stream().forEach(deviceCheckTask -> deviceCheckTask.run());
+        return devices.size();
     }
 
     /**
@@ -46,7 +59,8 @@ public class DeviceChecker {
      * @return The number of devices that were checked
      */
     public int checkDevicesConcurrently(final String customerId, RingDeviceFirmwareVersion version) {
-        // PARTICIPANTS: implement in Phase 3
+
+
         return 0;
     }
 
@@ -67,5 +81,10 @@ public class DeviceChecker {
 
     public RingDeviceCommunicatorService getRingDeviceCommunicatorService() {
         return ringDeviceCommunicatorService;
+    }
+
+    public GetCustomerDevicesRequest getDevicesRequest(String customerId) {
+        GetCustomerDevicesRequest.Builder devicesRequestBuilder = GetCustomerDevicesRequest.builder().withCustomerId(customerId);
+        return devicesRequestBuilder.build();
     }
 }
