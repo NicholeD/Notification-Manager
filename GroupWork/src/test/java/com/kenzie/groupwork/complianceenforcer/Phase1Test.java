@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -62,7 +63,15 @@ public class Phase1Test {
         // WHEN
         // We update the devices with the improved algorithm
         double improvedAvg = runProfile(
-                () -> complianceEnforcer.updateDevices(deviceIds, KnownRingDeviceFirmwareVersions.PINKY));
+                () -> {
+                    try {
+                        complianceEnforcer.updateDevices(deviceIds, KnownRingDeviceFirmwareVersions.PINKY);
+                    } catch (ExecutionException e) {
+                        throw new RuntimeException(e);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
 
         // THEN
         // The average run time has improved

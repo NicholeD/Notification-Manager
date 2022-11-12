@@ -12,8 +12,13 @@ import com.kenzie.executorservices.ringupdatescheck.customer.CustomerService;
 import com.kenzie.executorservices.ringupdatescheck.devicecommunication.RingDeviceCommunicatorService;
 import com.kenzie.executorservices.ringupdatescheck.util.KnownRingDeviceFirmwareVersions;
 
+import java.sql.Array;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class ComplianceEnforcer {
     private final CustomerService customerService;
@@ -58,10 +63,11 @@ public class ComplianceEnforcer {
      * @return A list of devices that could not be updated. If all updates were successful,
      *         this list will be empty. It will never be null.
      */
-    public List<String> updateDevices(List<String> nonCompliantDeviceIds, RingDeviceFirmwareVersion latest) {
+    public List<String> updateDevices(List<String> nonCompliantDeviceIds,
+                                      RingDeviceFirmwareVersion latest) throws ExecutionException, InterruptedException {
 
         // Update all the devices and keep track of their update responses.
-        List<UpdateDeviceFirmwareResponse> updateStatuses = triggerUpdates(nonCompliantDeviceIds, latest);
+        List<Future<UpdateDeviceFirmwareResponse>> updateStatuses = triggerUpdates(nonCompliantDeviceIds, latest);
 
         // Collect all the unsuccessful device IDs.
         List<String> unsuccessfulDevices = collectUnsuccessfulUpdates(updateStatuses);
@@ -113,31 +119,34 @@ public class ComplianceEnforcer {
     /**
      * Helper method that triggers updates for all the devices to the given version.
      */
-    private List<UpdateDeviceFirmwareResponse> triggerUpdates(List<String> nonCompliantDeviceIds,
+    private List<Future<UpdateDeviceFirmwareResponse>> triggerUpdates(List<String> nonCompliantDeviceIds,
                                                               RingDeviceFirmwareVersion latest) {
-        List<UpdateDeviceFirmwareResponse> updateStatuses = new ArrayList<>();
+        ExecutorService responseExecutor = Executors.newCachedThreadPool();
+        List<Future<UpdateDeviceFirmwareResponse>> futureStatuses = new ArrayList<>();
+
         for (String deviceId : nonCompliantDeviceIds) {
             UpdateDeviceFirmwareRequest updateRequest = UpdateDeviceFirmwareRequest.builder()
                     .withDeviceId(deviceId)
                     .withVersion(latest)
                     .build();
-            UpdateDeviceFirmwareResponse updateResponse = ringClient.updateDeviceFirmware(updateRequest);
-            updateStatuses.add(updateResponse);
+            Future<UpdateDeviceFirmwareResponse> updateResponse = responseExecutor.submit(
+                    () -> ringClient.updateDeviceFirmware(updateRequest));
+            futureStatuses.add(updateResponse);
         }
-        return updateStatuses;
+        return futureStatuses;
     }
 
     /**
      * Helper method that collects all the updates that were unsuccessful.
      */
-    private List<String> collectUnsuccessfulUpdates(List<UpdateDeviceFirmwareResponse> updateStatuses) {
+    private List<String> collectUnsuccessfulUpdates(List<Future<UpdateDeviceFirmwareResponse>> updateStatuses)
+            throws ExecutionException, InterruptedException {
         List<String> unsuccessfulDevices = new ArrayList<>();
-        for (UpdateDeviceFirmwareResponse updateStatus : updateStatuses) {
-            if (!updateStatus.isWasSuccessful()) {
-                unsuccessfulDevices.add(updateStatus.getDeviceId());
+        for (Future<UpdateDeviceFirmwareResponse> updateStatus : updateStatuses) {
+            if (!updateStatus.get().isWasSuccessful()) {
+                unsuccessfulDevices.add(updateStatus.get().getDeviceId());
             }
         }
         return unsuccessfulDevices;
     }
-
 }
