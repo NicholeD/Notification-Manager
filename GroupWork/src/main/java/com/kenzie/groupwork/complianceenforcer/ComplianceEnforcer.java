@@ -15,10 +15,8 @@ import com.kenzie.executorservices.ringupdatescheck.util.KnownRingDeviceFirmware
 import java.sql.Array;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 public class ComplianceEnforcer {
     private final CustomerService customerService;
@@ -42,12 +40,12 @@ public class ComplianceEnforcer {
      * @return A list of non-compliant device IDs. If all the customer's devices are up-to-date,
      *         this list will be empty. It will never be null.
      */
-    public List<String> findUpdatesForCustomer(String customerId, RingDeviceFirmwareVersion approved) {
+    public List<String> findUpdatesForCustomer(String customerId, RingDeviceFirmwareVersion approved) throws ExecutionException, InterruptedException {
         // Find all the Ring devices this customer owns
         List<String> deviceIds = getCustomerDevices(customerId);
 
         // Find the version of each device
-        List<RingDeviceSystemInfo> deviceInfo = getInfoForDevices(deviceIds);
+        List<Future<RingDeviceSystemInfo>> deviceInfo = getInfoForDevices(deviceIds);
 
         // Check whether each device meets the minimum approved version
         List<String> nonCompliantDevices = collectNonCompliantDevices(deviceInfo, approved);
@@ -89,28 +87,32 @@ public class ComplianceEnforcer {
     /**
      * Helper method that gets the system info for the provided devices.
      */
-    private List<RingDeviceSystemInfo> getInfoForDevices(List<String> deviceIds) {
-        List<RingDeviceSystemInfo> deviceInfo = new ArrayList<>();
+    private List<Future<RingDeviceSystemInfo>> getInfoForDevices(List<String> deviceIds) {
+        ExecutorService deviceInfoExecutor = Executors.newCachedThreadPool();
+        List<Future<RingDeviceSystemInfo>> futureDeviceInfo = new ArrayList<>();
+
         for (String deviceId : deviceIds) {
             GetDeviceSystemInfoRequest versionRequest = GetDeviceSystemInfoRequest.builder()
                     .withDeviceId(deviceId)
                     .build();
-            GetDeviceSystemInfoResponse infoResponse = ringClient.getDeviceSystemInfo(versionRequest);
-            deviceInfo.add(infoResponse.getSystemInfo());
+            futureDeviceInfo.add(deviceInfoExecutor.submit(() ->
+                    (ringClient.getDeviceSystemInfo(versionRequest)).getSystemInfo()));
         }
-        return deviceInfo;
+        deviceInfoExecutor.shutdown();
+
+        return futureDeviceInfo;
     }
 
     /**
      * Helper method that collects all the devices that don't meet the approved version.
      */
-    private List<String> collectNonCompliantDevices(List<RingDeviceSystemInfo> deviceInfo,
-                                                   RingDeviceFirmwareVersion approved) {
+    private List<String> collectNonCompliantDevices(List<Future<RingDeviceSystemInfo>> deviceInfo,
+                                                   RingDeviceFirmwareVersion approved) throws ExecutionException, InterruptedException {
         List<String> nonCompliantDevices = new ArrayList<>();
-        for (RingDeviceSystemInfo info : deviceInfo) {
-            RingDeviceFirmwareVersion version = info.getDeviceFirmwareVersion();
+        for (Future<RingDeviceSystemInfo> info : deviceInfo) {
+            RingDeviceFirmwareVersion version = info.get().getDeviceFirmwareVersion();
             if (KnownRingDeviceFirmwareVersions.needsUpdate(version, approved)) {
-                nonCompliantDevices.add(info.getDeviceId());
+                nonCompliantDevices.add(info.get().getDeviceId());
             }
         }
         return nonCompliantDevices;
@@ -129,10 +131,10 @@ public class ComplianceEnforcer {
                     .withDeviceId(deviceId)
                     .withVersion(latest)
                     .build();
-            Future<UpdateDeviceFirmwareResponse> updateResponse = responseExecutor.submit(
-                    () -> ringClient.updateDeviceFirmware(updateRequest));
-            futureStatuses.add(updateResponse);
+            futureStatuses.add(responseExecutor.submit(
+                    () -> ringClient.updateDeviceFirmware(updateRequest)));
         }
+        responseExecutor.shutdown();
         return futureStatuses;
     }
 
