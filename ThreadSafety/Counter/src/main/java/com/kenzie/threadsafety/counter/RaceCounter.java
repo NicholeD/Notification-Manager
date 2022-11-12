@@ -2,21 +2,22 @@ package com.kenzie.threadsafety.counter;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class RaceCounter {
-    private int counter = 0;
+    private AtomicInteger counter = new AtomicInteger(0);
 
     /**
      * Initializes the two threads and starts the counter.
      *
      * @param countTo The number to count up to. Also the number of threads to create.
      */
-    public void startCounter(int countTo) {
+    public synchronized void startCounter(int countTo) {
         ExecutorService executorService = Executors.newCachedThreadPool();
 
         for (int i = 0; i < countTo; i++) {
             executorService.submit(() -> {
-                counter++;
+                counter.getAndIncrement();
             });
         }
 
@@ -28,7 +29,7 @@ public class RaceCounter {
      * @return The current value of the counter.
      */
     public int getCounter() {
-        return this.counter;
+        return this.counter.intValue();
     }
 
 }
